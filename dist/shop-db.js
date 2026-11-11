@@ -117,6 +117,10 @@
         '<div class="field full"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required></div>' +
         '<div class="field full"><label for="authPass">Password (10+ characters)</label><input id="authPass" type="password" minlength="10" autocomplete="current-password" required></div>' +
       '</div><button class="button quiet" type="button" id="authGoogle" style="width:100%;margin-top:13px">Continue with Google</button>' +
+      '<button class="button quiet" type="button" id="authApple" style="width:100%;margin-top:8px">Continue with Apple</button>' +
+      '<div class="field full" style="margin-top:13px"><label for="authPhone">Or phone (+66…)</label><input id="authPhone" type="tel" autocomplete="tel" placeholder="+66812345678"></div>' +
+      '<div class="field full" id="authCodeRow" hidden><label for="authCode">6-digit code</label><input id="authCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></div>' +
+      '<button class="button quiet" type="button" id="authPhoneBtn" style="width:100%;margin-top:8px">Text me a code</button>' +
       '<p class="fine" id="authMsg" role="status"></p>' +
       '<div class="dialog-actions"><button class="button quiet" type="button" id="authToggle">Create account instead</button>' +
       '<button class="button pink" type="submit" id="authSubmit">Sign in</button></div></form>' +
@@ -142,7 +146,7 @@
     el('authAccount').hidden = false;
     el('authTitle').textContent = 'Your account';
     el('authHint').textContent = '';
-    el('authWho').textContent = 'Signed in as ' + session.user.email;
+    el('authWho').textContent = 'Signed in as ' + (session.user.email || session.user.phone);
     const list = el('authOrders');
     list.replaceChildren();
     const { data, error } = await sb.from('orders').select('id,status,total_thb,created_at')
@@ -174,12 +178,40 @@
 
   el('authClose').onclick = () => dlg.close();
   el('authToggle').onclick = () => setMode(mode === 'in' ? 'up' : 'in');
-  el('authGoogle').onclick = async () => {
+  const oauth = provider => async () => {
     const { error } = await sb.auth.signInWithOAuth({
-      provider: 'google',
+      provider,
       options: { redirectTo: location.origin + location.pathname },
     });
-    if (error) el('authMsg').textContent = error.message;
+    if (error) el('authMsg').textContent = 'That sign-in is not available yet.';
+  };
+  el('authGoogle').onclick = oauth('google');
+  el('authApple').onclick = oauth('apple');
+
+  // Phone: text a one-time code, then verify it.
+  let phoneSent = '';
+  el('authPhoneBtn').onclick = async () => {
+    const msg = el('authMsg'), btn = el('authPhoneBtn');
+    btn.disabled = true;
+    try {
+      if (!phoneSent) {
+        let ph = el('authPhone').value.replace(/[\s-]/g, '');
+        if (/^0\d{9}$/.test(ph)) ph = '+66' + ph.slice(1); // Thai local format
+        if (!/^\+[1-9]\d{7,14}$/.test(ph)) { msg.textContent = 'Enter the phone number like +66812345678.'; return; }
+        const { error } = await sb.auth.signInWithOtp({ phone: ph });
+        if (error) { msg.textContent = 'Could not send the code. Try again later.'; return; }
+        phoneSent = ph;
+        el('authCodeRow').hidden = false;
+        btn.textContent = 'Verify code';
+        msg.textContent = 'Code sent. Enter it above.';
+      } else {
+        const token = el('authCode').value.trim();
+        if (!/^\d{6}$/.test(token)) { msg.textContent = 'Enter the 6-digit code.'; return; }
+        const { error } = await sb.auth.verifyOtp({ phone: phoneSent, token, type: 'sms' });
+        if (error) { msg.textContent = 'Wrong or expired code.'; return; }
+        phoneSent = ''; dlg.close(); tell('Signed in');
+      }
+    } finally { btn.disabled = false; }
   };
   el('authOut').onclick = async () => { await sb.auth.signOut(); dlg.close(); tell('Signed out'); };
 
@@ -224,7 +256,7 @@
 
   function refreshAcctLabel() {
     acct.setAttribute('aria-label', session ? 'Your account' : 'Sign in');
-    acct.title = session ? session.user.email : 'Sign in';
+    acct.title = session ? (session.user.email || session.user.phone) : 'Sign in';
   }
 
   sb.auth.onAuthStateChange((_evt, s) => {
