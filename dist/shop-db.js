@@ -116,7 +116,8 @@
       '<form id="authForm"><div class="form">' +
         '<div class="field full"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required></div>' +
         '<div class="field full"><label for="authPass">Password (8+ characters)</label><input id="authPass" type="password" minlength="8" autocomplete="current-password" required></div>' +
-      '</div><p class="fine" id="authMsg" role="status"></p>' +
+      '</div><button class="button quiet" type="button" id="authGoogle" style="width:100%;margin-top:13px">Continue with Google</button>' +
+      '<p class="fine" id="authMsg" role="status"></p>' +
       '<div class="dialog-actions"><button class="button quiet" type="button" id="authToggle">Create account instead</button>' +
       '<button class="button pink" type="submit" id="authSubmit">Sign in</button></div></form>' +
       '<div id="authAccount" hidden><p id="authWho"></p><h3>Recent orders</h3><ul id="authOrders"></ul>' +
@@ -173,6 +174,13 @@
 
   el('authClose').onclick = () => dlg.close();
   el('authToggle').onclick = () => setMode(mode === 'in' ? 'up' : 'in');
+  el('authGoogle').onclick = async () => {
+    const { error } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: location.origin + location.pathname },
+    });
+    if (error) el('authMsg').textContent = error.message;
+  };
   el('authOut').onclick = async () => { await sb.auth.signOut(); dlg.close(); tell('Signed out'); };
 
   el('authForm').onsubmit = async e => {
