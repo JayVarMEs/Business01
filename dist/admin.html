@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- Strict policy: only this site's own files, the pinned supabase-js, and the Supabase API. No inline code. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; connect-src https://dgwyxjgzdctwgvuziyzf.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>MakersBridge Admin</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <header class="bar">
+    <strong>MakersBridge Admin</strong>
+    <span id="who" class="muted"></span>
+    <button id="signOut" type="button" class="ghost" hidden>Sign out</button>
+  </header>
+
+  <main>
+    <p id="note" role="status" class="note" hidden></p>
+
+    <!-- 1. Sign in -->
+    <section id="view-login" class="card narrow" hidden>
+      <h1>Admin sign in</h1>
+      <form id="loginForm" autocomplete="on">
+        <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
+        <label>Password<input id="loginPass" type="password" autocomplete="current-password" required></label>
+        <button type="submit" class="primary">Sign in</button>
+      </form>
+    </section>
+
+    <!-- 2. Not an admin -->
+    <section id="view-denied" class="card narrow" hidden>
+      <h1>No admin access</h1>
+      <p>This account is not an administrator.</p>
+    </section>
+
+    <!-- 3. Two-step verification -->
+    <section id="view-mfa" class="card narrow" hidden>
+      <h1>Two-step verification</h1>
+      <div id="mfaEnroll" hidden>
+        <p>Scan this QR code with an authenticator app (Google Authenticator, Authy, 1Password…), then type the 6-digit code.</p>
+        <img id="mfaQr" alt="Authenticator QR code" width="200" height="200">
+        <p class="muted">Can't scan? Enter this key by hand:</p>
+        <code id="mfaSecret"></code>
+      </div>
+      <p id="mfaAsk" hidden>Enter the 6-digit code from your authenticator app.</p>
+      <form id="mfaForm" autocomplete="off">
+        <label>6-digit code<input id="mfaCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required></label>
+        <button type="submit" class="primary">Verify</button>
+      </form>
+    </section>
+
+    <!-- 4. Dashboard -->
+    <section id="view-dash" hidden>
+      <div id="stats" class="stats"></div>
+      <nav class="tabs" role="tablist" aria-label="Admin sections">
+        <button type="button" role="tab" data-tab="orders" aria-selected="true">Orders</button>
+        <button type="button" role="tab" data-tab="products" aria-selected="false">Products</button>
+        <button type="button" role="tab" data-tab="campaigns" aria-selected="false">Preorders</button>
+        <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit log</button>
+      </nav>
+
+      <div id="tab-orders" class="card" role="tabpanel">
+        <div class="row"><h2>Orders</h2><button id="reloadOrders" type="button" class="ghost">Refresh</button></div>
+        <div class="scroll"><table><thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Action</th></tr></thead><tbody id="ordersBody"></tbody></table></div>
+      </div>
+
+      <div id="tab-products" class="card" role="tabpanel" hidden>
+        <h2>Products</h2>
+        <div class="scroll"><table><thead><tr><th>Name</th><th>Type</th><th>Price ฿</th><th>Live</th><th></th></tr></thead><tbody id="productsBody"></tbody></table></div>
+        <h3>Add product</h3>
+        <form id="productForm" class="grid">
+          <label>Name<input id="pName" maxlength="120" required></label>
+          <label>Seller<input id="pSeller" maxlength="80" required></label>
+          <label>Price ฿<input id="pPrice" type="number" min="1" max="100000" step="1" required></label>
+          <label>Type<select id="pKind"><option value="ready">Ready stock</option><option value="preorder">Preorder</option></select></label>
+          <label>Categories (comma separated: jersey, apparel, bag)<input id="pCats" placeholder="jersey"></label>
+          <label>Image link (https only, optional)<input id="pImage" type="url" placeholder="https://"></label>
+          <button type="submit" class="primary">Add product</button>
+        </form>
+      </div>
+
+      <div id="tab-campaigns" class="card" role="tabpanel" hidden>
+        <h2>Preorder campaigns</h2>
+        <div class="scroll"><table><thead><tr><th>Campaign</th><th>Minimum</th><th>Deposit ฿</th><th>Ends</th><th>Live</th><th></th></tr></thead><tbody id="campaignsBody"></tbody></table></div>
+        <h3>Add preorder</h3>
+        <form id="campaignForm" class="grid">
+          <label>Title<input id="cTitle" maxlength="120" required></label>
+          <label>Seller<input id="cSeller" maxlength="80" required></label>
+          <label>Product<select id="cProduct"></select></label>
+          <label>Minimum people<input id="cMin" type="number" min="1" max="100000" step="1" required></label>
+          <label>Deposit ฿<input id="cDeposit" type="number" min="1" max="100000" step="1" required></label>
+          <label>Ends on<input id="cEnds" type="date" required></label>
+          <label class="wide">Description (max 500 characters)<textarea id="cDesc" maxlength="500"></textarea></label>
+          <button type="submit" class="primary">Add preorder</button>
+        </form>
+      </div>
+
+      <div id="tab-audit" class="card" role="tabpanel" hidden>
+        <div class="row"><h2>Audit log</h2><button id="reloadAudit" type="button" class="ghost">Refresh</button></div>
+        <p class="muted">Every product, preorder and order-status change. Nobody can edit or delete this list.</p>
+        <div class="scroll"><table><thead><tr><th>When</th><th>Action</th><th>What</th><th>Change</th></tr></thead><tbody id="auditBody"></tbody></table></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

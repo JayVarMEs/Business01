@@ -1,0 +1,57 @@
+name: Security checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Block secret keys and unsafe code
+        run: |
+          python3 - <<'PY'
+          import base64, json, pathlib, re, sys
+          bad = []
+          skip = {'.git'}
+          for f in pathlib.Path('.').rglob('*'):
+              if not f.is_file() or any(p in skip for p in f.parts):
+                  continue
+              if f.suffix in {'.png', '.zip', '.svg', '.jpg', '.gif', '.woff2'}:
+                  continue
+              if f.name in {'security.yml', 'SECURITY.md'}:
+                  continue
+              t = f.read_text(errors='ignore')
+              if re.search(r'sb_secret_[A-Za-z0-9_-]{10,}', t):
+                  bad.append(f'{f}: Supabase secret key')
+              for m in re.finditer(r'eyJ[A-Za-z0-9_-]{10,}\.([A-Za-z0-9_-]{10,})\.[A-Za-z0-9_-]{10,}', t):
+                  try:
+                      payload = m.group(1) + '=' * (-len(m.group(1)) % 4)
+                      role = json.loads(base64.urlsafe_b64decode(payload)).get('role')
+                  except Exception:
+                      continue
+                  if role == 'service_role':
+                      bad.append(f'{f}: service_role JWT')
+              if re.search(r'-----BEGIN [A-Z ]*PRIVATE KEY-----', t):
+                  bad.append(f'{f}: private key')
+          admin = pathlib.Path('dist/admin.js')
+          if admin.exists() and re.search(r'innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(', admin.read_text()):
+              bad.append('dist/admin.js: uses an HTML-injecting API (XSS risk)')
+          for page in pathlib.Path('dist').glob('*.html'):
+              for m in re.finditer(r'<script[^>]+src="https?://[^"]+"[^>]*>', page.read_text()):
+                  if 'integrity=' not in m.group(0):
+                      bad.append(f'{page}: external script without integrity hash')
+          if bad:
+              print('\n'.join('FAIL ' + b for b in bad)); sys.exit(1)
+          print('OK: no secrets, no unsafe admin code, external scripts pinned')
+          PY
+
+      - name: JavaScript syntax
+        run: |
+          for f in dist/*.js; do node --check "$f"; done
