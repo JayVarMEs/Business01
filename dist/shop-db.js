@@ -115,7 +115,7 @@
       '<button class="round-btn" type="button" id="authClose" aria-label="Close sign in"><svg class="icon"><use href="#close"/></svg></button></div>' +
       '<form id="authForm"><div class="form">' +
         '<div class="field full"><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required></div>' +
-        '<div class="field full"><label for="authPass">Password (8+ characters)</label><input id="authPass" type="password" minlength="8" autocomplete="current-password" required></div>' +
+        '<div class="field full"><label for="authPass">Password (10+ characters)</label><input id="authPass" type="password" minlength="10" autocomplete="current-password" required></div>' +
       '</div><button class="button quiet" type="button" id="authGoogle" style="width:100%;margin-top:13px">Continue with Google</button>' +
       '<p class="fine" id="authMsg" role="status"></p>' +
       '<div class="dialog-actions"><button class="button quiet" type="button" id="authToggle">Create account instead</button>' +
@@ -202,7 +202,10 @@
         dlg.close(); tell('Signed in');
       }
     } catch (err) {
-      msg.textContent = err.message || 'Something went wrong. Try again.';
+      // Same wording for "no such user" and "wrong password" so attackers learn nothing.
+      msg.textContent = /confirm/i.test(err.message || '') ? 'Please confirm your email first.'
+        : mode === 'in' ? 'Wrong email or password.'
+        : /password/i.test(err.message || '') ? err.message : 'Could not create the account. Try a different email or password.';
     } finally { btn.disabled = false; }
   };
 
@@ -258,7 +261,9 @@
       if (typeof closeCart === 'function') closeCart();
       tell('Order #' + String(data).slice(0, 8) + ' saved. Payment is not connected yet.');
     } catch (err) {
-      tell(err.message || 'Could not place the order');
+      // Only show our own messages; never raw database errors.
+      tell(/^(Sign in first|Bag must|Too many pending|Daily order limit|Product not available|Preorder is closed|Bad )/.test(err.message || '')
+        ? err.message : 'Could not place the order. Please try again.');
     } finally { busy = false; checkout.disabled = false; }
   };
 
